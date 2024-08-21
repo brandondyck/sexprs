@@ -12,11 +12,116 @@ import (
 	"testing"
 
 	"github.com/eadmund/sexprs"
+	"pgregory.net/rapid"
 )
 
+func TODO(t *testing.T) {
+	t.Fatalf("TODO")
+}
+
+func Atom() *rapid.Generator[sexprs.Atom] {
+	return rapid.Custom(func(t *rapid.T) sexprs.Atom {
+		return sexprs.Atom{
+			DisplayHint: rapid.SliceOf(rapid.Byte()).Draw(t, "DisplayHint"),
+			Value:       rapid.SliceOf(rapid.Byte()).Draw(t, "Value"),
+		}
+	})
+}
+
+func List() *rapid.Generator[sexprs.List] {
+	return rapid.Custom(func(t *rapid.T) sexprs.List {
+		var s []sexprs.Sexp = rapid.SliceOfN(rapid.Deferred(Sexp), 0, 5).Draw(t, "s")
+		return sexprs.List(s)
+	})
+}
+
+func AsSexp[T sexprs.Sexp](value T) sexprs.Sexp {
+	return sexprs.Sexp(value)
+}
+
+func Sexp() *rapid.Generator[sexprs.Sexp] {
+	return rapid.Custom(func(t *rapid.T) sexprs.Sexp {
+		choice := rapid.Uint8Range(0, 10).Draw(t, "choice")
+		if choice < 7 {
+			return rapid.Map(Atom(), AsSexp).Draw(t, "atom-sexp")
+		}
+		return rapid.Map(rapid.Deferred(List), AsSexp).Draw(t, "list-sexp")
+	})
+}
+
+func TestPackAndParseEqual(t *testing.T) {
+	rapid.Check(t, func(t *rapid.T) {
+		sexp := Sexp().Draw(t, "sexp")
+		packed := sexp.Pack()
+		parsed, rest, err := sexprs.Parse(packed)
+		if err != nil {
+			t.Fatalf("failed to parse sexp: %v", err)
+		}
+		if len(rest) != 0 {
+			t.Errorf("unexpected remaining bytes after parsing sexp: %v", rest)
+		}
+		if parsed == nil {
+			t.Fatal("parsed sexp is nil")
+		}
+		if !parsed.Equal(sexp) || !sexp.Equal(parsed) {
+			t.Fatalf("result not equal to original sexp\nexpected %q\ngot %q", packed, parsed.Pack())
+		}
+	})
+}
+
+func TestTransportAndParseEqual(t *testing.T) {
+	rapid.Check(t, func(t *rapid.T) {
+		sexp := Sexp().Draw(t, "sexp")
+		transport := sexp.Base64String()
+		parsed, rest, err := sexprs.Parse([]byte(transport))
+		if err != nil {
+			t.Fatalf("failed to parse sexp: %v", err)
+		}
+		if len(rest) != 0 {
+			t.Errorf("unexpected remaining bytes after parsing sexp: %v", rest)
+		}
+		if parsed == nil {
+			t.Fatal("parsed sexp is nil")
+		}
+		if !parsed.Equal(sexp) || !sexp.Equal(parsed) {
+			t.Fatalf("result not equal to original sexp\nexpected %q\ngot %q", transport, parsed.Pack())
+		}
+	})
+}
+
+func MustBeEqual(t rapid.TB, s1, s2 sexprs.Sexp) {
+	e1 := s1.Equal(s2)
+	e2 := s2.Equal(s1)
+	if e1 == !e2 {
+		t.Logf("expected Sexp.Equal to be commutative, but got different results")
+	}
+	if !(e1 && e2) {
+		t.Fatalf("expected sexps to be equal\ns1: %q\ns2: %q", string(s1.Pack()), string(s2.Pack()))
+	}
+}
+
+func MustNotBeEqual(t rapid.TB, s1, s2 sexprs.Sexp) {
+	e1 := s1.Equal(s2)
+	e2 := s2.Equal(s1)
+	if e1 == !e2 {
+		t.Logf("expected Sexp.Equal to be commutative, but got different results")
+	}
+	if e1 || e2 {
+		t.Fatalf("expected sexps not to be equal\ns1: %q\ns2: %q", string(s1.Pack()), string(s2.Pack()))
+	}
+}
+
+func TestNotEqual(t *testing.T) {
+	t.Run("add item to list", TODO)
+	t.Run("wrap in list", TODO)
+	t.Run("remove item from list", TODO)
+	t.Run("change atom's hint", TODO)
+	t.Run("change atom's value", TODO)
+}
+
 func TestAtomPack(t *testing.T) {
-	atom := sexprs.Atom{Value: []byte("This is a test")}
-	b := atom.Pack()
+	a := sexprs.Atom{Value: []byte("This is a test")}
+	b := a.Pack()
 	if !bytes.Equal(b, []byte("14:This is a test")) {
 		t.Fail()
 	}
@@ -28,13 +133,6 @@ func assertPacked(t *testing.T, sexp sexprs.Sexp, expected string) {
 	if !bytes.Equal([]byte(expected), packed) {
 		t.Fatalf("unexpected canonical representation\nexpected %q\ngot %q", expected, string(packed))
 	}
-}
-
-func TestSlice(t *testing.T) {
-	// TODO What is this test supposed to do?
-	slice := []sexprs.Sexp{sexprs.Atom{Value: []byte("Foo")},
-		sexprs.Atom{Value: []byte("bar")}}
-	_ = slice
 }
 
 func TestList(t *testing.T) {
@@ -84,31 +182,8 @@ func TestParse(t *testing.T) {
 	)
 }
 
-func TestTransport(t *testing.T) {
-	s1, _, err := sexprs.Parse([]byte("{KDM6Zm9vMzpiYXJbMzpiaW5dODpiYXogcXV1eCk=}"))
-	if err != nil {
-		t.Fatal(err)
-	}
-	if s1 == nil {
-		t.Fatal("List is nil")
-	}
-	s2, _, err := sexprs.Parse([]byte("(3:foo3:bar[3:bin]8:baz quux)"))
-	if err != nil {
-		t.Fatal(err)
-	}
-	if s2 == nil {
-		t.Fatal("List is nil")
-	}
-	if !s1.Equal(s2) {
-		t.Fatal("Transport and non-transport-loaded S-expressions are not equal")
-	}
-	if s2.Base64String() != ("{KDM6Zm9vMzpiYXJbMzpiaW5dODpiYXogcXV1eCk=}") {
-		t.Fatal("Transport encoding failed")
-	}
-	t.Log(string(s1.Pack()))
-}
-
 func TestIsList(t *testing.T) {
+	TODO(t) // convert to prop test
 	s, _, err := sexprs.Parse([]byte("(abc efg-hijk )"))
 	if err != nil {
 		t.Fatal("Could not parse list", err)
@@ -126,6 +201,7 @@ func TestIsList(t *testing.T) {
 }
 
 func TestRead(t *testing.T) {
+	TODO(t) // consider converting to prop test
 	s, err := sexprs.Read(bufio.NewReader(bytes.NewReader([]byte("()"))))
 	if err != nil {
 		t.Fatal(err)
