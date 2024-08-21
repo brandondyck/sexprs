@@ -15,10 +15,6 @@ import (
 	"pgregory.net/rapid"
 )
 
-func TODO(t *testing.T) {
-	t.Fatalf("TODO")
-}
-
 type T rapid.TB
 
 func Atom() *rapid.Generator[sexprs.Atom] {
@@ -239,129 +235,126 @@ func TestIsList(t *testing.T) {
 }
 
 func TestRead(t *testing.T) {
-	TODO(t) // consider converting to prop test
-	s, err := sexprs.Read(bufio.NewReader(bytes.NewReader([]byte("()"))))
-	if err != nil {
-		t.Fatal(err)
-	}
-	l, ok := s.(sexprs.List)
-	if !ok {
-		t.Fatal("List expected")
-	}
-	if len(l) != 0 {
-		t.Fatal("Zero-length list expected")
-	}
-	s, err = sexprs.Read(bufio.NewReader(bytes.NewReader([]byte("6:foobar"))))
-	if err != nil && err != io.EOF {
-		t.Fatal(err)
-	}
-	a, ok := s.(sexprs.Atom)
-	if !ok {
-		t.Fatal("Atom expected")
-	}
-	t.Log(string(a.Value), len(a.Value))
-	s, err = sexprs.Read(bufio.NewReader(bytes.NewReader([]byte("7:foobar"))))
-	if err == nil {
-		t.Fatal("Didn't fail on invalid bytestring")
-	}
-	a, ok = s.(sexprs.Atom)
-	if !ok {
-		t.Fatal("Atom expected")
-	}
-	if !bytes.Equal(a.Value, []byte("foobar")) {
-		t.Fatal("bad ", a)
-	}
-	s, err = sexprs.Read(bufio.NewReader(bytes.NewReader([]byte("3#61 6 263#"))))
-	if err != nil && err != io.EOF {
-		t.Fatal(err)
-	}
-	a, ok = s.(sexprs.Atom)
-	if !ok {
-		t.Fatal("Atom expected")
-	}
-	if !bytes.Equal(a.Value, []byte("abc")) {
-		t.Fatal("Bad ", a)
-	}
-	s, err = sexprs.Read(bufio.NewReader(bytes.NewReader([]byte("3|Y2\r\nJ h|"))))
-	if err != nil && err != io.EOF {
-		t.Fatal(err)
-	}
-	a, ok = s.(sexprs.Atom)
-	if !ok {
-		t.Fatal("Atom expected")
-	}
-	if !bytes.Equal(a.Value, []byte("cba")) {
-		t.Fatal("Bad ", a)
-	}
-	//t.Log(">>", string(a.Value))
-	// hex without length
-	s, err = sexprs.Read(bufio.NewReader(bytes.NewReader([]byte("#616263#"))))
-	if err != nil && err != io.EOF {
-		t.Fatal(err)
-	}
-	a, ok = s.(sexprs.Atom)
-	if !ok {
-		t.Fatal("Atom expected")
-	}
-	if !bytes.Equal(a.Value, []byte("abc")) {
-		t.Fatal("Bad ", a)
-	}
-	// base64 without length
-	s, err = sexprs.Read(bufio.NewReader(bytes.NewReader([]byte("|Y2Jh|"))))
-	if err != nil && err != io.EOF {
-		t.Fatal(err)
-	}
-	a, ok = s.(sexprs.Atom)
-	if !ok {
-		t.Fatal("Atom expected")
-	}
-	if !bytes.Equal(a.Value, []byte("cba")) {
-		t.Fatal("Bad ", a)
-	}
-	// quoted string without length
-	s, err = sexprs.Read(bufio.NewReader(bytes.NewReader([]byte("\"Foo bar \rbaz quux\\\nquuux\""))))
-	if err != nil && err != io.EOF {
-		t.Fatal(err)
-	}
-	a, ok = s.(sexprs.Atom)
-	if !ok {
-		t.Fatal("Atom expected")
-	}
-	if !bytes.Equal(a.Value, []byte("Foo bar \rbaz quuxquuux")) {
-		t.Fatal("Bad ", a)
-	}
-	// escaped return
-	s, err = sexprs.Read(bufio.NewReader(bytes.NewReader([]byte("\"Foo bar \\\r\""))))
-	if err != nil && err != io.EOF {
-		t.Fatal(err)
-	}
-	a, ok = s.(sexprs.Atom)
-	if !ok {
-		t.Fatal("Atom expected")
-	}
-	if !bytes.Equal(a.Value, []byte("Foo bar ")) {
-		t.Fatal("Bad ", a)
-	}
-	// list
-	s, err = sexprs.Read(bufio.NewReader(bytes.NewReader([]byte("(a b)"))))
-	if err != nil && err != io.EOF {
-		t.Fatal(err)
-	}
-	l, ok = s.(sexprs.List)
-	if !ok {
-		t.Fatal("List expected")
-	}
-	if !l.Equal(sexprs.List{sexprs.Atom{Value: []byte("a")}, sexprs.Atom{Value: []byte("b")}}) {
-		t.Fatal("Bad ", l)
-	}
-	// display hint
-	s, err = sexprs.Read(bufio.NewReader(bytes.NewReader([]byte("[abc]bar"))))
-	if err != nil && err != io.EOF {
-		t.Fatal(err)
-	}
-	if !s.Equal(sexprs.Atom{DisplayHint: []byte("abc"), Value: []byte("bar")}) {
-		t.Fatal("Bad s-expression", s)
-	}
+	t.Run("empty list", func(t *testing.T) {
+		s, err := sexprs.Read(bufio.NewReader(bytes.NewReader([]byte("()"))))
+		if err != nil {
+			t.Fatal(err)
+		}
+		MustBeEqual(t, s, sexprs.List{})
+	})
+	t.Run("atom with no hint", func(t *testing.T) {
+		s, err := sexprs.Read(bufio.NewReader(bytes.NewReader([]byte("6:foobar"))))
+		if err != nil && err != io.EOF {
+			t.Fatal(err)
+		}
+		MustBeEqual(t, s, sexprs.Atom{Value: []byte("foobar")})
+	})
+	t.Run("invalid bytestring", func(t *testing.T) {
+		_, err := sexprs.Read(bufio.NewReader(bytes.NewReader([]byte("7:foobar"))))
+		if err == nil {
+			t.Fatal("Didn't fail on invalid bytestring")
+		}
+	})
+	t.Run("hex with length", func(t *testing.T) {
+		s, err := sexprs.Read(bufio.NewReader(bytes.NewReader([]byte("3#61 6 263#"))))
+		if err != nil && err != io.EOF {
+			t.Fatal(err)
+		}
+		a, ok := s.(sexprs.Atom)
+		if !ok {
+			t.Fatal("Atom expected")
+		}
+		if !bytes.Equal(a.Value, []byte("abc")) {
+			t.Fatal("Bad ", a)
+		}
+	})
+	t.Run("base64 string with length", func(t *testing.T) {
+		s, err := sexprs.Read(bufio.NewReader(bytes.NewReader([]byte("3|Y2\r\nJ h|"))))
+		if err != nil && err != io.EOF {
+			t.Fatal(err)
+		}
+		a, ok := s.(sexprs.Atom)
+		if !ok {
+			t.Fatal("Atom expected")
+		}
+		if !bytes.Equal(a.Value, []byte("cba")) {
+			t.Fatal("Bad ", a)
+		}
+	})
+	t.Run("hex without length", func(t *testing.T) {
+		s, err := sexprs.Read(bufio.NewReader(bytes.NewReader([]byte("#616263#"))))
+		if err != nil && err != io.EOF {
+			t.Fatal(err)
+		}
+		a, ok := s.(sexprs.Atom)
+		if !ok {
+			t.Fatal("Atom expected")
+		}
+		if !bytes.Equal(a.Value, []byte("abc")) {
+			t.Fatal("Bad ", a)
+		}
+	})
+	t.Run("base64 without length", func(t *testing.T) {
+		s, err := sexprs.Read(bufio.NewReader(bytes.NewReader([]byte("|Y2Jh|"))))
+		if err != nil && err != io.EOF {
+			t.Fatal(err)
+		}
+		a, ok := s.(sexprs.Atom)
+		if !ok {
+			t.Fatal("Atom expected")
+		}
+		if !bytes.Equal(a.Value, []byte("cba")) {
+			t.Fatal("Bad ", a)
+		}
+	})
+	t.Run("quoted string without length", func(t *testing.T) {
+		s, err := sexprs.Read(bufio.NewReader(bytes.NewReader([]byte("\"Foo bar \rbaz quux\\\nquuux\""))))
+		if err != nil && err != io.EOF {
+			t.Fatal(err)
+		}
+		a, ok := s.(sexprs.Atom)
+		if !ok {
+			t.Fatal("Atom expected")
+		}
+		if !bytes.Equal(a.Value, []byte("Foo bar \rbaz quuxquuux")) {
+			t.Fatal("Bad ", a)
+		}
+	})
+	t.Run("escaped return", func(t *testing.T) {
+		s, err := sexprs.Read(bufio.NewReader(bytes.NewReader([]byte("\"Foo bar \\\r\""))))
+		if err != nil && err != io.EOF {
+			t.Fatal(err)
+		}
+		a, ok := s.(sexprs.Atom)
+		if !ok {
+			t.Fatal("Atom expected")
+		}
+		if !bytes.Equal(a.Value, []byte("Foo bar ")) {
+			t.Fatal("Bad ", a)
+		}
+	})
+	t.Run("list", func(t *testing.T) {
+		s, err := sexprs.Read(bufio.NewReader(bytes.NewReader([]byte("(a b)"))))
+		if err != nil && err != io.EOF {
+			t.Fatal(err)
+		}
+		l, ok := s.(sexprs.List)
+		if !ok {
+			t.Fatal("List expected")
+		}
+		if !l.Equal(sexprs.List{sexprs.Atom{Value: []byte("a")}, sexprs.Atom{Value: []byte("b")}}) {
+			t.Fatal("Bad ", l)
+		}
+	})
+	t.Run("display hint", func(t *testing.T) {
+		s, err := sexprs.Read(bufio.NewReader(bytes.NewReader([]byte("[abc]bar"))))
+		if err != nil && err != io.EOF {
+			t.Fatal(err)
+		}
+		if !s.Equal(sexprs.Atom{DisplayHint: []byte("abc"), Value: []byte("bar")}) {
+			t.Fatal("Bad s-expression", s)
+		}
+	})
 }
 
 func ExampleAtom_Pack() {
