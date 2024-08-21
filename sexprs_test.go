@@ -2,7 +2,7 @@
 // Use of this source code is goverend by an MIT-style license which may
 // be found in the LICENSE file.
 
-package sexprs
+package sexprs_test
 
 import (
 	"bufio"
@@ -10,10 +10,12 @@ import (
 	"fmt"
 	"io"
 	"testing"
+
+	"github.com/eadmund/sexprs"
 )
 
-func TestAtomToString(t *testing.T) {
-	atom := Atom{Value: []byte("This is a test")}
+func TestAtomPack(t *testing.T) {
+	atom := sexprs.Atom{Value: []byte("This is a test")}
 	b := atom.Pack()
 	if !bytes.Equal(b, []byte("14:This is a test")) {
 		t.Fail()
@@ -21,16 +23,16 @@ func TestAtomToString(t *testing.T) {
 }
 
 func TestSlice(t *testing.T) {
-	slice := []Sexp{Atom{Value: []byte("Foo")},
-		Atom{Value: []byte("bar")}}
+	slice := []sexprs.Sexp{sexprs.Atom{Value: []byte("Foo")},
+		sexprs.Atom{Value: []byte("bar")}}
 	_ = slice
 }
 
 func TestList(t *testing.T) {
-	var a Atom
-	a = Atom{Value: []byte("This is a test")}
-	var l Sexp
-	l = List{a}
+	var a sexprs.Atom
+	a = sexprs.Atom{Value: []byte("This is a test")}
+	var l sexprs.Sexp
+	l = sexprs.List{a}
 	if l == nil {
 		t.Fail()
 	}
@@ -38,7 +40,7 @@ func TestList(t *testing.T) {
 }
 
 func TestParseEmptyList(t *testing.T) {
-	l, _, err := Parse([]byte("()"))
+	l, _, err := sexprs.Parse([]byte("()"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -47,44 +49,44 @@ func TestParseEmptyList(t *testing.T) {
 
 func TestError(t *testing.T) {
 	s := "((a)"
-	_, _, err := Parse([]byte(s))
+	_, _, err := sexprs.Parse([]byte(s))
 	if err == nil {
 		t.Fatalf("Parsing %v should have produced an error", s)
 	}
 }
 
 func TestParse(t *testing.T) {
-	s, _, err := Parse([]byte("([text]test)"))
+	s, _, err := sexprs.Parse([]byte("([text]test)"))
 	if err != nil {
 		t.Fatal(err)
 	}
 	t.Log(string(s.Pack()))
-	s, _, err = Parse([]byte("(4:test3:foo(baz))"))
+	s, _, err = sexprs.Parse([]byte("(4:test3:foo(baz))"))
 	if err != nil {
 		t.Fatal(err)
 	}
 	t.Log(string(s.Pack()))
-	s, _, err = Parse([]byte("testing"))
+	s, _, err = sexprs.Parse([]byte("testing"))
 	if err != nil {
 		t.Fatal(err)
 	}
 	t.Log(string(s.Pack()))
-	s, _, err = Parse([]byte("\"testing-foo bar\""))
+	s, _, err = sexprs.Parse([]byte("\"testing-foo bar\""))
 	if err != nil {
 		t.Fatal(err)
 	}
 	t.Log(string(s.Pack()))
-	s, _, err = Parse([]byte("(\"testing-foo bar\")"))
+	s, _, err = sexprs.Parse([]byte("(\"testing-foo bar\")"))
 	if err != nil {
 		t.Fatal(err)
 	}
 	t.Log(string(s.Pack()))
-	s, _, err = Parse([]byte("(testing-foo\" bar\")"))
+	s, _, err = sexprs.Parse([]byte("(testing-foo\" bar\")"))
 	if err != nil {
 		t.Fatal(err)
 	}
 	t.Log(string(s.Pack()))
-	s, _, err = Parse([]byte("([foo/bar]#7a # [\"quux beam\"]bar ([jim]|Zm9vYmFy YmF6|)\"foo bar\\r\"{Zm9vYmFyYmF6})"))
+	s, _, err = sexprs.Parse([]byte("([foo/bar]#7a # [\"quux beam\"]bar ([jim]|Zm9vYmFy YmF6|)\"foo bar\\r\"{Zm9vYmFyYmF6})"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -96,14 +98,14 @@ func TestParse(t *testing.T) {
 }
 
 func TestTransport(t *testing.T) {
-	s1, _, err := Parse([]byte("{KDM6Zm9vMzpiYXJbMzpiaW5dODpiYXogcXV1eCk=}"))
+	s1, _, err := sexprs.Parse([]byte("{KDM6Zm9vMzpiYXJbMzpiaW5dODpiYXogcXV1eCk=}"))
 	if err != nil {
 		t.Fatal(err)
 	}
 	if s1 == nil {
 		t.Fatal("List is nil")
 	}
-	s2, _, err := Parse([]byte("(3:foo3:bar[3:bin]8:baz quux)"))
+	s2, _, err := sexprs.Parse([]byte("(3:foo3:bar[3:bin]8:baz quux)"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -120,70 +122,70 @@ func TestTransport(t *testing.T) {
 }
 
 func TestIsList(t *testing.T) {
-	s, _, err := Parse([]byte("(abc efg-hijk )"))
+	s, _, err := sexprs.Parse([]byte("(abc efg-hijk )"))
 	if err != nil {
 		t.Fatal("Could not parse list", err)
 	}
-	if !IsList(s) {
+	if !sexprs.IsList(s) {
 		t.Fatal("List considered not-List")
 	}
-	s, _, err = Parse([]byte("abc"))
+	s, _, err = sexprs.Parse([]byte("abc"))
 	if err != nil {
 		t.Fatal("Could not parse atom", err)
 	}
-	if IsList(s) {
+	if sexprs.IsList(s) {
 		t.Fatal("Atom considered List")
 	}
 }
 
 func TestRead(t *testing.T) {
-	s, err := Read(bufio.NewReader(bytes.NewReader([]byte("()"))))
+	s, err := sexprs.Read(bufio.NewReader(bytes.NewReader([]byte("()"))))
 	if err != nil {
 		t.Fatal(err)
 	}
-	l, ok := s.(List)
+	l, ok := s.(sexprs.List)
 	if !ok {
 		t.Fatal("List expected")
 	}
 	if len(l) != 0 {
 		t.Fatal("Zero-length list expected")
 	}
-	s, err = Read(bufio.NewReader(bytes.NewReader([]byte("6:foobar"))))
+	s, err = sexprs.Read(bufio.NewReader(bytes.NewReader([]byte("6:foobar"))))
 	if err != nil && err != io.EOF {
 		t.Fatal(err)
 	}
-	a, ok := s.(Atom)
+	a, ok := s.(sexprs.Atom)
 	if !ok {
 		t.Fatal("Atom expected")
 	}
 	t.Log(string(a.Value), len(a.Value))
-	s, err = Read(bufio.NewReader(bytes.NewReader([]byte("7:foobar"))))
+	s, err = sexprs.Read(bufio.NewReader(bytes.NewReader([]byte("7:foobar"))))
 	if err == nil {
 		t.Fatal("Didn't fail on invalid bytestring")
 	}
-	a, ok = s.(Atom)
+	a, ok = s.(sexprs.Atom)
 	if !ok {
 		t.Fatal("Atom expected")
 	}
 	if !bytes.Equal(a.Value, []byte("foobar")) {
 		t.Fatal("bad ", a)
 	}
-	s, err = Read(bufio.NewReader(bytes.NewReader([]byte("3#61 6 263#"))))
+	s, err = sexprs.Read(bufio.NewReader(bytes.NewReader([]byte("3#61 6 263#"))))
 	if err != nil && err != io.EOF {
 		t.Fatal(err)
 	}
-	a, ok = s.(Atom)
+	a, ok = s.(sexprs.Atom)
 	if !ok {
 		t.Fatal("Atom expected")
 	}
 	if !bytes.Equal(a.Value, []byte("abc")) {
 		t.Fatal("Bad ", a)
 	}
-	s, err = Read(bufio.NewReader(bytes.NewReader([]byte("3|Y2\r\nJ h|"))))
+	s, err = sexprs.Read(bufio.NewReader(bytes.NewReader([]byte("3|Y2\r\nJ h|"))))
 	if err != nil && err != io.EOF {
 		t.Fatal(err)
 	}
-	a, ok = s.(Atom)
+	a, ok = s.(sexprs.Atom)
 	if !ok {
 		t.Fatal("Atom expected")
 	}
@@ -192,11 +194,11 @@ func TestRead(t *testing.T) {
 	}
 	//t.Log(">>", string(a.Value))
 	// hex without length
-	s, err = Read(bufio.NewReader(bytes.NewReader([]byte("#616263#"))))
+	s, err = sexprs.Read(bufio.NewReader(bytes.NewReader([]byte("#616263#"))))
 	if err != nil && err != io.EOF {
 		t.Fatal(err)
 	}
-	a, ok = s.(Atom)
+	a, ok = s.(sexprs.Atom)
 	if !ok {
 		t.Fatal("Atom expected")
 	}
@@ -204,11 +206,11 @@ func TestRead(t *testing.T) {
 		t.Fatal("Bad ", a)
 	}
 	// base64 without length
-	s, err = Read(bufio.NewReader(bytes.NewReader([]byte("|Y2Jh|"))))
+	s, err = sexprs.Read(bufio.NewReader(bytes.NewReader([]byte("|Y2Jh|"))))
 	if err != nil && err != io.EOF {
 		t.Fatal(err)
 	}
-	a, ok = s.(Atom)
+	a, ok = s.(sexprs.Atom)
 	if !ok {
 		t.Fatal("Atom expected")
 	}
@@ -216,11 +218,11 @@ func TestRead(t *testing.T) {
 		t.Fatal("Bad ", a)
 	}
 	// quoted string without length
-	s, err = Read(bufio.NewReader(bytes.NewReader([]byte("\"Foo bar \rbaz quux\\\nquuux\""))))
+	s, err = sexprs.Read(bufio.NewReader(bytes.NewReader([]byte("\"Foo bar \rbaz quux\\\nquuux\""))))
 	if err != nil && err != io.EOF {
 		t.Fatal(err)
 	}
-	a, ok = s.(Atom)
+	a, ok = s.(sexprs.Atom)
 	if !ok {
 		t.Fatal("Atom expected")
 	}
@@ -228,11 +230,11 @@ func TestRead(t *testing.T) {
 		t.Fatal("Bad ", a)
 	}
 	// escaped return
-	s, err = Read(bufio.NewReader(bytes.NewReader([]byte("\"Foo bar \\\r\""))))
+	s, err = sexprs.Read(bufio.NewReader(bytes.NewReader([]byte("\"Foo bar \\\r\""))))
 	if err != nil && err != io.EOF {
 		t.Fatal(err)
 	}
-	a, ok = s.(Atom)
+	a, ok = s.(sexprs.Atom)
 	if !ok {
 		t.Fatal("Atom expected")
 	}
@@ -240,31 +242,31 @@ func TestRead(t *testing.T) {
 		t.Fatal("Bad ", a)
 	}
 	// list
-	s, err = Read(bufio.NewReader(bytes.NewReader([]byte("(a b)"))))
+	s, err = sexprs.Read(bufio.NewReader(bytes.NewReader([]byte("(a b)"))))
 	if err != nil && err != io.EOF {
 		t.Fatal(err)
 	}
-	l, ok = s.(List)
+	l, ok = s.(sexprs.List)
 	if !ok {
 		t.Fatal("List expected")
 	}
-	if !l.Equal(List{Atom{Value: []byte("a")}, Atom{Value: []byte("b")}}) {
+	if !l.Equal(sexprs.List{sexprs.Atom{Value: []byte("a")}, sexprs.Atom{Value: []byte("b")}}) {
 		t.Fatal("Bad ", l)
 	}
 	// display hint
-	s, err = Read(bufio.NewReader(bytes.NewReader([]byte("[abc]bar"))))
+	s, err = sexprs.Read(bufio.NewReader(bytes.NewReader([]byte("[abc]bar"))))
 	if err != nil && err != io.EOF {
 		t.Fatal(err)
 	}
-	if !s.Equal(Atom{DisplayHint: []byte("abc"), Value: []byte("bar")}) {
+	if !s.Equal(sexprs.Atom{DisplayHint: []byte("abc"), Value: []byte("bar")}) {
 		t.Fatal("Bad s-expression", s)
 	}
 }
 
 func ExampleAtom_Pack() {
-	foo := Atom{Value: []byte("foo")}
+	foo := sexprs.Atom{Value: []byte("foo")}
 	fmt.Println(string(foo.Pack()))
-	bar := Atom{DisplayHint: []byte("text/plain"), Value: []byte("bar")}
+	bar := sexprs.Atom{DisplayHint: []byte("text/plain"), Value: []byte("bar")}
 	fmt.Println(string(bar.Pack()))
 	// Output:
 	// 3:foo
@@ -272,7 +274,7 @@ func ExampleAtom_Pack() {
 }
 
 func ExampleAtom_String() {
-	foo := Atom{Value: []byte("foo")}
+	foo := sexprs.Atom{Value: []byte("foo")}
 	fmt.Println(foo.String())
 	foo.Value = []byte("bar baz")
 	fmt.Println(foo.String())
@@ -288,9 +290,9 @@ func ExampleAtom_String() {
 }
 
 func ExampleList_Pack() {
-	list := List{Atom{Value: []byte("foo")}, List{Atom{Value: []byte("bar baz"), DisplayHint: []byte("text/plain")}, Atom{DisplayHint: []byte{'\n'}}}}
+	list := sexprs.List{sexprs.Atom{Value: []byte("foo")}, sexprs.List{sexprs.Atom{Value: []byte("bar baz"), DisplayHint: []byte("text/plain")}, sexprs.Atom{DisplayHint: []byte{'\n'}}}}
 	fmt.Println(string(list.Pack()))
-	readList, _, err := Parse([]byte(list.String()))
+	readList, _, err := sexprs.Parse([]byte(list.String()))
 	if err != nil {
 		panic(err)
 	}
@@ -302,9 +304,9 @@ func ExampleList_Pack() {
 }
 
 func ExampleList_String() {
-	list := List{Atom{Value: []byte("foo")}, List{Atom{Value: []byte("bar baz"), DisplayHint: []byte("text/plain")}, Atom{DisplayHint: []byte{1, 2, 3}}}}
+	list := sexprs.List{sexprs.Atom{Value: []byte("foo")}, sexprs.List{sexprs.Atom{Value: []byte("bar baz"), DisplayHint: []byte("text/plain")}, sexprs.Atom{DisplayHint: []byte{1, 2, 3}}}}
 	fmt.Println(list.String())
-	readList, _, err := Parse([]byte(list.String()))
+	readList, _, err := sexprs.Parse([]byte(list.String()))
 	if err != nil {
 		panic(err)
 	}
