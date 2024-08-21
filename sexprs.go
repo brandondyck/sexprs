@@ -368,7 +368,7 @@ func Parse(s []byte) (sexpr Sexp, rest []byte, err error) {
 
 // IsList returns true if its argument is a List.
 func IsList(s Sexp) bool {
-	s, ok := s.(List)
+	_, ok := s.(List)
 	return ok
 }
 
@@ -651,7 +651,8 @@ func readQuotedString(r *bufio.Reader, length int) (s []byte, err error) {
 				state = inHex1
 			default:
 				if bytes.IndexByte(octalDigit, c) > -1 {
-					state = inOctal2
+					// TODO test octal escapes to make sure this ineffectual assignment wasn't a bug
+					// state = inOctal2
 					escape[0] = c
 				} else {
 					return nil, fmt.Errorf("Unrecognised escape character %c", rune(c))

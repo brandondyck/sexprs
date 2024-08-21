@@ -17,7 +17,7 @@ import (
 
 type T rapid.TB
 
-func Atom() *rapid.Generator[sexprs.Atom] {
+func AtomG() *rapid.Generator[sexprs.Atom] {
 	return rapid.Custom(func(t *rapid.T) sexprs.Atom {
 		return sexprs.Atom{
 			DisplayHint: rapid.SliceOf(rapid.Byte()).Draw(t, "DisplayHint"),
@@ -26,9 +26,9 @@ func Atom() *rapid.Generator[sexprs.Atom] {
 	})
 }
 
-func List() *rapid.Generator[sexprs.List] {
+func ListG() *rapid.Generator[sexprs.List] {
 	return rapid.Custom(func(t *rapid.T) sexprs.List {
-		var s []sexprs.Sexp = rapid.SliceOfN(rapid.Deferred(Sexp), 0, 5).Draw(t, "s")
+		var s []sexprs.Sexp = rapid.SliceOfN(rapid.Deferred(SexpG), 0, 5).Draw(t, "s")
 		return sexprs.List(s)
 	})
 }
@@ -37,19 +37,19 @@ func AsSexp[T sexprs.Sexp](value T) sexprs.Sexp {
 	return sexprs.Sexp(value)
 }
 
-func Sexp() *rapid.Generator[sexprs.Sexp] {
+func SexpG() *rapid.Generator[sexprs.Sexp] {
 	return rapid.Custom(func(t *rapid.T) sexprs.Sexp {
 		choice := rapid.Uint8Range(0, 10).Draw(t, "choice")
 		if choice < 7 {
-			return rapid.Map(Atom(), AsSexp).Draw(t, "atom-sexp")
+			return rapid.Map(AtomG(), AsSexp).Draw(t, "atom-sexp")
 		}
-		return rapid.Map(rapid.Deferred(List), AsSexp).Draw(t, "list-sexp")
+		return rapid.Map(rapid.Deferred(ListG), AsSexp).Draw(t, "list-sexp")
 	})
 }
 
 func TestPackAndParseEqual(t *testing.T) {
 	rapid.Check(t, func(t *rapid.T) {
-		sexp := Sexp().Draw(t, "sexp")
+		sexp := SexpG().Draw(t, "sexp")
 		packed := sexp.Pack()
 		parsed, rest, err := sexprs.Parse(packed)
 		if err != nil {
@@ -67,7 +67,7 @@ func TestPackAndParseEqual(t *testing.T) {
 
 func TestTransportAndParseEqual(t *testing.T) {
 	rapid.Check(t, func(t *rapid.T) {
-		sexp := Sexp().Draw(t, "sexp")
+		sexp := SexpG().Draw(t, "sexp")
 		transport := sexp.Base64String()
 		parsed, rest, err := sexprs.Parse([]byte(transport))
 		if err != nil {
@@ -109,7 +109,7 @@ func MustNotBeEqual(t T, s1, s2 sexprs.Sexp) {
 
 func TestCloneEqual(t *testing.T) {
 	rapid.Check(t, func(t *rapid.T) {
-		sexp := Sexp().Draw(t, "sexp")
+		sexp := SexpG().Draw(t, "sexp")
 		cloned := sexp.Clone()
 		MustBeEqual(t, sexp, cloned)
 	})
@@ -123,31 +123,31 @@ func ListHasAtLeast(n int) func(l sexprs.List) bool {
 
 func TestNotEqual(t *testing.T) {
 	t.Run("add item to list", rapid.MakeCheck(func(t *rapid.T) {
-		original := List().Draw(t, "original")
-		extra := Sexp().Draw(t, "extra")
+		original := ListG().Draw(t, "original")
+		extra := SexpG().Draw(t, "extra")
 		longer := original.Clone().(sexprs.List)
 		longer = append(longer, extra)
 		MustNotBeEqual(t, original, longer)
 	}))
 	t.Run("wrap in list", rapid.MakeCheck(func(t *rapid.T) {
-		original := Sexp().Draw(t, "original")
+		original := SexpG().Draw(t, "original")
 		wrapped := sexprs.List{original}
 		MustNotBeEqual(t, original, wrapped)
 	}))
 	t.Run("remove item from list", rapid.MakeCheck(func(t *rapid.T) {
-		original := List().Filter(ListHasAtLeast(1)).Draw(t, "original")
+		original := ListG().Filter(ListHasAtLeast(1)).Draw(t, "original")
 		shorter := original.Clone().(sexprs.List)
 		shorter = shorter[:len(shorter)-1]
 		MustNotBeEqual(t, original, shorter)
 	}))
 	t.Run("change atom's display hint", rapid.MakeCheck(func(t *rapid.T) {
-		original := Atom().Draw(t, "original")
+		original := AtomG().Draw(t, "original")
 		changed := original.Clone().(sexprs.Atom)
 		changed.DisplayHint = append(changed.DisplayHint, 'x')
 		MustNotBeEqual(t, original, changed)
 	}))
 	t.Run("change atom's value", rapid.MakeCheck(func(t *rapid.T) {
-		original := Atom().Draw(t, "original")
+		original := AtomG().Draw(t, "original")
 		changed := original.Clone().(sexprs.Atom)
 		changed.Value = append(changed.Value, 'x')
 		MustNotBeEqual(t, original, changed)
