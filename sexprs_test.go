@@ -22,29 +22,25 @@ func TestAtomPack(t *testing.T) {
 	}
 }
 
+func assertPacked(t *testing.T, sexp sexprs.Sexp, expected string) {
+	t.Helper()
+	packed := sexp.Pack()
+	if !bytes.Equal([]byte(expected), packed) {
+		t.Fatalf("unexpected canonical representation\nexpected %q\ngot %q", expected, string(packed))
+	}
+}
+
 func TestSlice(t *testing.T) {
+	// TODO What is this test supposed to do?
 	slice := []sexprs.Sexp{sexprs.Atom{Value: []byte("Foo")},
 		sexprs.Atom{Value: []byte("bar")}}
 	_ = slice
 }
 
 func TestList(t *testing.T) {
-	var a sexprs.Atom
-	a = sexprs.Atom{Value: []byte("This is a test")}
-	var l sexprs.Sexp
-	l = sexprs.List{a}
-	if l == nil {
-		t.Fail()
-	}
-	t.Log(string(l.Pack()))
-}
-
-func TestParseEmptyList(t *testing.T) {
-	l, _, err := sexprs.Parse([]byte("()"))
-	if err != nil {
-		t.Fatal(err)
-	}
-	t.Log(string(l.Pack()))
+	a := sexprs.Atom{Value: []byte("This is a test")}
+	l := sexprs.List{a}
+	assertPacked(t, l, "(14:This is a test)")
 }
 
 func TestError(t *testing.T) {
@@ -55,46 +51,37 @@ func TestError(t *testing.T) {
 	}
 }
 
+func testParse(t *testing.T, input, expectedOutput string) {
+	t.Helper()
+	t.Run(input, func(t *testing.T) {
+		t.Helper()
+		sexp, rest, err := sexprs.Parse([]byte(input))
+		if err != nil {
+			t.Fatalf("could not parse %q: %v", input, err)
+		}
+		if sexp == nil {
+			t.Fatalf("nil result from parsing %q", input)
+		}
+		if len(rest) != 0 {
+			t.Errorf("unexpected remaining input after parsing %q: %q", input, string(rest))
+		}
+		assertPacked(t, sexp, expectedOutput)
+	})
+
+}
+
 func TestParse(t *testing.T) {
-	s, _, err := sexprs.Parse([]byte("([text]test)"))
-	if err != nil {
-		t.Fatal(err)
-	}
-	t.Log(string(s.Pack()))
-	s, _, err = sexprs.Parse([]byte("(4:test3:foo(baz))"))
-	if err != nil {
-		t.Fatal(err)
-	}
-	t.Log(string(s.Pack()))
-	s, _, err = sexprs.Parse([]byte("testing"))
-	if err != nil {
-		t.Fatal(err)
-	}
-	t.Log(string(s.Pack()))
-	s, _, err = sexprs.Parse([]byte("\"testing-foo bar\""))
-	if err != nil {
-		t.Fatal(err)
-	}
-	t.Log(string(s.Pack()))
-	s, _, err = sexprs.Parse([]byte("(\"testing-foo bar\")"))
-	if err != nil {
-		t.Fatal(err)
-	}
-	t.Log(string(s.Pack()))
-	s, _, err = sexprs.Parse([]byte("(testing-foo\" bar\")"))
-	if err != nil {
-		t.Fatal(err)
-	}
-	t.Log(string(s.Pack()))
-	s, _, err = sexprs.Parse([]byte("([foo/bar]#7a # [\"quux beam\"]bar ([jim]|Zm9vYmFy YmF6|)\"foo bar\\r\"{Zm9vYmFyYmF6})"))
-	if err != nil {
-		t.Fatal(err)
-	}
-	if s == nil {
-		t.Fatal("Not parsed")
-	}
-	t.Log(string(s.Pack()))
-	t.Log(s.String())
+	testParse(t, "()", "()")
+	testParse(t, "([text]test)", "([4:text]4:test)")
+	testParse(t, "(4:test3:foo(baz))", "(4:test3:foo(3:baz))")
+	testParse(t, "testing", "7:testing")
+	testParse(t, `"testing-foo bar"`, "15:testing-foo bar")
+	testParse(t, `("testing-foo bar")`, "(15:testing-foo bar)")
+	testParse(t, `(testing-foo" bar")`, "(11:testing-foo4: bar)")
+	testParse(t,
+		`([foo/bar]#7a # ["quux beam"]bar ([jim]|Zm9vYmFy YmF6|)"foo bar\r"{Zm9vYmFyYmF6})`,
+		"([7:foo/bar]1:z[9:quux beam]3:bar([3:jim]9:foobarbaz)8:foo bar\r9:foobarbaz)",
+	)
 }
 
 func TestTransport(t *testing.T) {
