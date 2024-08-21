@@ -23,17 +23,21 @@
 // appearance.
 //
 // The S-expression (foo bar [bin]"baz quux") is canonically:
-//    (3:foo3:bar[3:bin]8:quux)
+//
+//	(3:foo3:bar[3:bin]8:quux)
 //
 // Among the valid advanced representations are:
-//    (foo 3:bar [bin]"baz quux")
+//
+//	(foo 3:bar [bin]"baz quux")
+//
 // and:
-//    ("foo" #626172# [3:bin]|YmF6IHF1dXg=|)
+//
+//	("foo" #626172# [3:bin]|YmF6IHF1dXg=|)
 //
 // There is also a transport encoding (intended for use in 7-bit transport
 // modes), delimited with {}:
-//    {KDM6Zm9vMzpiYXJbMzpiaW5dODpiYXogcXV1eCk=}
 //
+//	{KDM6Zm9vMzpiYXJbMzpiaW5dODpiYXogcXV1eCk=}
 package sexprs
 
 import (
@@ -41,12 +45,10 @@ import (
 	"bytes"
 	"encoding/base64"
 	"encoding/hex"
+	"errors"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"strconv"
-
-	"github.com/pkg/errors"
 )
 
 var (
@@ -338,7 +340,7 @@ func Parse(s []byte) (sexpr Sexp, rest []byte, err error) {
 	if err != nil && err != io.EOF {
 		return nil, nil, err
 	}
-	rest, err = ioutil.ReadAll(r)
+	rest, err = io.ReadAll(r)
 	// don't confuse calling code with EOFs
 	if err == io.EOF {
 		err = nil
@@ -368,7 +370,7 @@ func Read(r *bufio.Reader) (s Sexp, err error) {
 			n   int
 		)
 		if enc, err = r.ReadBytes('}'); err != nil {
-			return nil, errors.Wrap(err, "couldn't read to end of transport-encoded S-expression")
+			return nil, fmt.Errorf("couldn't read to end of transport-encoded S-expression: %w", err)
 		}
 		acc := make([]byte, 0, len(enc)-1)
 		for _, c := range enc[:len(enc)-1] {
@@ -384,7 +386,7 @@ func Read(r *bufio.Reader) (s Sexp, err error) {
 		if err == nil || err == io.EOF {
 			return s, nil
 		}
-		return nil, errors.Wrap(err, "couldn't read decoded transport-encoded S-expression")
+		return nil, fmt.Errorf("couldn't read decoded transport-encoded S-expression: %w", err)
 	case '(':
 		l := List{}
 		// skip whitespace
@@ -392,14 +394,14 @@ func Read(r *bufio.Reader) (s Sexp, err error) {
 			var c byte
 			c, err = r.ReadByte()
 			if err != nil && err != io.EOF {
-				return nil, errors.Wrap(err, "couldn't read next byte of list")
+				return nil, fmt.Errorf("couldn't read next byte of list: %w", err)
 			}
 			switch {
 			case c == ')':
 				return l, err
 			case bytes.IndexByte(whitespaceChar, c) == -1:
 				if err = r.UnreadByte(); err != nil {
-					return nil, errors.Wrap(err, "couldn't unread byte")
+					return nil, fmt.Errorf("couldn't unread byte: %w", err)
 				}
 				var element Sexp
 				if element, err = Read(r); err != nil {
@@ -502,10 +504,10 @@ func readLengthDelimited(r *bufio.Reader, first byte) (b []byte, err error) {
 				return nil, err
 			}
 			if b, err = readHex(r); err != nil {
-				return nil, errors.Wrap(err, "couldn't read length-delimited bytes")
+				return nil, fmt.Errorf("couldn't read length-delimited bytes: %w", err)
 			}
 			if len(b) != int(length) {
-				return nil, errors.Errorf("expected %d bytes; got %d", length, len(b))
+				return nil, fmt.Errorf("expected %d bytes; got %d", length, len(b))
 			}
 			return b, err
 		case c == '|':
@@ -514,14 +516,14 @@ func readLengthDelimited(r *bufio.Reader, first byte) (b []byte, err error) {
 				return nil, err
 			}
 			if b, err = readBase64(r); err != nil {
-				return nil, errors.Wrap(err, "couldn't read Base64-encoded bytes")
+				return nil, fmt.Errorf("couldn't read Base64-encoded bytes: %w", err)
 			}
 			if len(b) != int(length) {
-				return nil, errors.Errorf("expected %d bytes; got %d", length, len(b))
+				return nil, fmt.Errorf("expected %d bytes; got %d", length, len(b))
 			}
 			return b, err
 		default:
-			return nil, errors.Errorf("expected integer; found %c", c)
+			return nil, fmt.Errorf("expected integer; found %c", c)
 		}
 	}
 }
@@ -529,7 +531,7 @@ func readLengthDelimited(r *bufio.Reader, first byte) (b []byte, err error) {
 func readHex(r *bufio.Reader) (b []byte, err error) {
 	var n int
 	if b, err = r.ReadBytes('#'); err != nil {
-		return nil, errors.Wrap(err, "couldn't read to #")
+		return nil, fmt.Errorf("couldn't read to #: %w", err)
 	}
 	acc := make([]byte, 0, len(b)-1)
 	for _, c := range b[:len(b)-1] {
@@ -545,7 +547,7 @@ func readHex(r *bufio.Reader) (b []byte, err error) {
 func readBase64(r *bufio.Reader) (b []byte, err error) {
 	var n int
 	if b, err = r.ReadBytes('|'); err != nil {
-		return nil, errors.Wrap(err, "couldn't read to |")
+		return nil, fmt.Errorf("couldn't read to |: %w", err)
 	}
 	acc := make([]byte, 0, len(b)-1)
 	for _, c := range b[:len(b)-1] {
