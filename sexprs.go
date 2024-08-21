@@ -48,6 +48,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"slices"
 	"strconv"
 )
 
@@ -97,6 +98,8 @@ type Sexp interface {
 	// Equal will return true if its receiver and argument are
 	// identical.
 	Equal(b Sexp) bool
+
+	Clone() Sexp
 }
 
 // A List is a slice of Lists and Atoms.
@@ -114,6 +117,13 @@ type List []Sexp
 type Atom struct {
 	DisplayHint []byte
 	Value       []byte
+}
+
+func (a Atom) Clone() Sexp {
+	return Atom{
+		DisplayHint: slices.Clone(a.DisplayHint),
+		Value:       slices.Clone(a.Value),
+	}
 }
 
 // Pack returns the canonical form of an Atom: a decimal indicating
@@ -256,6 +266,14 @@ func (a Atom) Equal(b Sexp) bool {
 	default:
 		return false
 	}
+}
+
+func (l List) Clone() Sexp {
+	l2 := make(List, len(l))
+	for i, item := range l {
+		l2[i] = item.Clone()
+	}
+	return l2
 }
 
 // Pack returns each component of List l within parentheses,

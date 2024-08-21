@@ -19,6 +19,8 @@ func TODO(t *testing.T) {
 	t.Fatalf("TODO")
 }
 
+type T rapid.TB
+
 func Atom() *rapid.Generator[sexprs.Atom] {
 	return rapid.Custom(func(t *rapid.T) sexprs.Atom {
 		return sexprs.Atom{
@@ -63,9 +65,7 @@ func TestPackAndParseEqual(t *testing.T) {
 		if parsed == nil {
 			t.Fatal("parsed sexp is nil")
 		}
-		if !parsed.Equal(sexp) || !sexp.Equal(parsed) {
-			t.Fatalf("result not equal to original sexp\nexpected %q\ngot %q", packed, parsed.Pack())
-		}
+		MustBeEqual(t, parsed, sexp)
 	})
 }
 
@@ -89,7 +89,7 @@ func TestTransportAndParseEqual(t *testing.T) {
 	})
 }
 
-func MustBeEqual(t rapid.TB, s1, s2 sexprs.Sexp) {
+func MustBeEqual(t T, s1, s2 sexprs.Sexp) {
 	e1 := s1.Equal(s2)
 	e2 := s2.Equal(s1)
 	if e1 == !e2 {
@@ -100,7 +100,7 @@ func MustBeEqual(t rapid.TB, s1, s2 sexprs.Sexp) {
 	}
 }
 
-func MustNotBeEqual(t rapid.TB, s1, s2 sexprs.Sexp) {
+func MustNotBeEqual(t T, s1, s2 sexprs.Sexp) {
 	e1 := s1.Equal(s2)
 	e2 := s2.Equal(s1)
 	if e1 == !e2 {
@@ -111,12 +111,51 @@ func MustNotBeEqual(t rapid.TB, s1, s2 sexprs.Sexp) {
 	}
 }
 
+func TestCloneEqual(t *testing.T) {
+	rapid.Check(t, func(t *rapid.T) {
+		sexp := Sexp().Draw(t, "sexp")
+		cloned := sexp.Clone()
+		MustBeEqual(t, sexp, cloned)
+	})
+}
+
+func ListHasAtLeast(n int) func(l sexprs.List) bool {
+	return func(l sexprs.List) bool {
+		return len(l) >= n
+	}
+}
+
 func TestNotEqual(t *testing.T) {
-	t.Run("add item to list", TODO)
-	t.Run("wrap in list", TODO)
-	t.Run("remove item from list", TODO)
-	t.Run("change atom's hint", TODO)
-	t.Run("change atom's value", TODO)
+	t.Run("add item to list", rapid.MakeCheck(func(t *rapid.T) {
+		original := List().Draw(t, "original")
+		extra := Sexp().Draw(t, "extra")
+		longer := original.Clone().(sexprs.List)
+		longer = append(longer, extra)
+		MustNotBeEqual(t, original, longer)
+	}))
+	t.Run("wrap in list", rapid.MakeCheck(func(t *rapid.T) {
+		original := Sexp().Draw(t, "original")
+		wrapped := sexprs.List{original}
+		MustNotBeEqual(t, original, wrapped)
+	}))
+	t.Run("remove item from list", rapid.MakeCheck(func(t *rapid.T) {
+		original := List().Filter(ListHasAtLeast(1)).Draw(t, "original")
+		shorter := original.Clone().(sexprs.List)
+		shorter = shorter[:len(shorter)-1]
+		MustNotBeEqual(t, original, shorter)
+	}))
+	t.Run("change atom's display hint", rapid.MakeCheck(func(t *rapid.T) {
+		original := Atom().Draw(t, "original")
+		changed := original.Clone().(sexprs.Atom)
+		changed.DisplayHint = append(changed.DisplayHint, 'x')
+		MustNotBeEqual(t, original, changed)
+	}))
+	t.Run("change atom's value", rapid.MakeCheck(func(t *rapid.T) {
+		original := Atom().Draw(t, "original")
+		changed := original.Clone().(sexprs.Atom)
+		changed.Value = append(changed.Value, 'x')
+		MustNotBeEqual(t, original, changed)
+	}))
 }
 
 func TestAtomPack(t *testing.T) {
@@ -127,7 +166,7 @@ func TestAtomPack(t *testing.T) {
 	}
 }
 
-func assertPacked(t *testing.T, sexp sexprs.Sexp, expected string) {
+func MustHavePackedEqual(t T, sexp sexprs.Sexp, expected string) {
 	t.Helper()
 	packed := sexp.Pack()
 	if !bytes.Equal([]byte(expected), packed) {
@@ -138,7 +177,7 @@ func assertPacked(t *testing.T, sexp sexprs.Sexp, expected string) {
 func TestList(t *testing.T) {
 	a := sexprs.Atom{Value: []byte("This is a test")}
 	l := sexprs.List{a}
-	assertPacked(t, l, "(14:This is a test)")
+	MustHavePackedEqual(t, l, "(14:This is a test)")
 }
 
 func TestError(t *testing.T) {
@@ -163,7 +202,7 @@ func testParse(t *testing.T, input, expectedOutput string) {
 		if len(rest) != 0 {
 			t.Errorf("unexpected remaining input after parsing %q: %q", input, string(rest))
 		}
-		assertPacked(t, sexp, expectedOutput)
+		MustHavePackedEqual(t, sexp, expectedOutput)
 	})
 
 }
@@ -183,7 +222,6 @@ func TestParse(t *testing.T) {
 }
 
 func TestIsList(t *testing.T) {
-	TODO(t) // convert to prop test
 	s, _, err := sexprs.Parse([]byte("(abc efg-hijk )"))
 	if err != nil {
 		t.Fatal("Could not parse list", err)
